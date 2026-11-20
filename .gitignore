@@ -6,3 +6,6 @@ node_modules/
 playwright-report/
 test-results/
 .DS_Store
+
+# Generated TypeScript output
+web/dist/

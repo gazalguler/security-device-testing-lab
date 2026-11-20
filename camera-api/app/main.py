@@ -1,6 +1,14 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 
 app = FastAPI(title="Security Device Testing Lab")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5500"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/camera/status")
