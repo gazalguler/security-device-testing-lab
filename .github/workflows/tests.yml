@@ -1,0 +1,104 @@
+name: Security Device Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        run: python -m pip install -r camera-api/requirements.txt
+
+      - name: Run API tests
+        working-directory: camera-api
+        run: python -m pytest -v
+
+  typescript-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Check TypeScript types
+        run: npm run typecheck
+
+      - name: Build web application
+        run: npm run build
+
+  playwright-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r camera-api/requirements.txt
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+
+      - name: Start application servers
+        run: |
+          (cd camera-api && python -m uvicorn app.main:app --port 8000) &
+          python -m http.server 5500 --directory web &
+
+      - name: Wait for application servers
+        run: |
+          python - <<'CHECK'
+          import time
+          import urllib.request
+
+          urls = [
+              "http://127.0.0.1:8000/camera/status",
+              "http://127.0.0.1:5500",
+          ]
+
+          for url in urls:
+              for attempt in range(30):
+                  try:
+                      with urllib.request.urlopen(url, timeout=2) as response:
+                          if response.status == 200:
+                              print(f"Ready: {url}")
+                              break
+                  except Exception:
+                      time.sleep(1)
+              else:
+                  raise RuntimeError(f"Server not ready: {url}")
+          CHECK
+
+      - name: Run Playwright tests
+        run: npx playwright test e2e/camera.spec.ts --browser=chromium
